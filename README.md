@@ -2,14 +2,40 @@
 
 A local desktop assistant, and an experiment in plan-first agents based around tool-call threads.
 
-Most agents today run a loop: the model picks a tool, sees the result, picks the next tool, and so on.
-AIDE tries the other route. A planner writes the *whole* plan up front as independent threads of tool
+Most agents today either run a loop or have an LLM with tools available to them.
+AIDE, instead of being centered around a single LLM generation, is centered around a plan of tool calls, so the tools
+are the centerpiece. 
+A planner writes the whole plan up front as independent threads of tool
 steps, an executor runs the threads in parallel, and a final pass writes one answer. I built it to see
-how far that design goes, where it breaks, and what code you end up writing to make it dependable
-(see [What I learned](#what-i-learned)).
+how far that design goes, the pros, and the cons.
 
 It runs on your own machine against a [llama.cpp](https://github.com/ggml-org/llama.cpp) server, has a
-floating chat window toggled by a global hotkey, and can optionally listen and speak.
+floating chat window toggled by a global hotkey, and can optionally listen and speak with whisper and kokoro.
+
+## What I learned
+
+The plan-first design has multiple advantages:
+- The plan can be inspected before execution
+- The independent sub-tasks can run in parallel, making it very efficient for a task with many separate substasks
+- Confirmation gates are easy to place
+
+
+It also has costs, and they are the reason this isn't the favorite agentic architecture in the modern day:
+- Planning blind struggles if the tool to call depends on the results of previous calls. An adaptive controller
+can help this, but it is more expensive it still is a significant weakness of this approach.
+- Latency can add up since tool calls are separate instead of being integrated into one process.
+- Models are now trained on structured calls and observations, making them better at those kinds of tasks instead
+of JSON.
+
+The limits of this specific implementation:
+- English only
+- Linux only
+- No streaming
+- No persistent memory across sessions
+- Safety tiers are heuristics
+
+Related ideas in the literature: plan-then-execute agents such as ReWOO and LLMCompiler, which also plan
+up front and run independent steps in parallel.
 
 ## How it works
 
@@ -26,19 +52,20 @@ flowchart LR
     C -. resume .-> E1
 ```
 
-1. **Plan.** The planner turns the request into JSON: independent *threads* (one per sub-task), each an
+1. The planner turns the request into JSON: independent threads to let it , each an
    ordered list of tool steps with `depends_on` links. Meanwhile a short acknowledgement is generated,
-   so the UI responds immediately.
-2. **Fix the plan.** Code, not the prompt, enforces the rules that matter. Duplicate steps are dropped,
+   so the UI responds immediately, to make it a bit more interactive.
+2. Fix the plan to ensure nothing is broken. Code, not the prompt, enforces the rules that matter. Duplicate steps are dropped,
    unknown tools are removed, and any `terminal` step is guaranteed a preceding `web_search` and
-   `deep_think`.
-3. **Execute.** Threads run in parallel. For each step, an LLM *resolver* converts the outputs of its
+   `deep_think`, in order to ensure the agent knows up to date commands and is sure about what it's doing.
+3. Threads run in parallel. For each step, an LLM resolver converts the outputs of its
    dependencies into the exact input the tool expects (a file path, a URL, a shell command). After
-   each step an *adaptive controller* decides whether to continue, retry with a different input,
+   each step an adaptive controller decides whether to continue, retry with a different input,
    inject extra steps (e.g. fetch the pages a search found), or abort.
-4. **Confirm.** Tools can pause a thread to ask for a yes/no. The turn is parked and resumes on the
-   user's next message, while the other threads' results are kept.
-5. **Synthesize.** Every thread ends with a `summarize` step. The final answer is written from those
+4. Tools can pause a thread to ask for a yes/no. The turn is parked and resumes on the
+   user's next message, while the other threads' results are kept. This is done in order to ensure
+   a safer agent that doesn't delete your whole environment by accident.
+5. Every thread ends with a `summarize` step. The final answer is written from those
    summaries, with a list of URLs that were actually fetched, so the model can't present a stale
    search-snippet link as verified.
 
@@ -79,7 +106,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Edit `config/settings.yaml`:
+Create `config/settings.yaml`:
 
 | Key | Meaning |
 |---|---|
@@ -87,6 +114,44 @@ Edit `config/settings.yaml`:
 | `embedder.base_url`, `embedder.model` | Any server with `/v1/embeddings`; defaults to Ollama's `nomic-embed-text` |
 | `paths.file_search_roots` | Folders `file_search` indexes in the background at startup |
 | `voice.enabled` | Turn on speech (needs `pip install -r requirements-voice.txt`) |
+
+Here is an example:
+```
+llm:
+  base_url: http://localhost:8081
+  model: Model-name
+  timeout: 300
+
+embedder:
+  base_url: http://localhost:11434
+  model: nomic-embed-text
+  timeout: 60
+
+ui:
+  window_width: 520
+  window_height: 600
+  opacity: 0.95
+
+voice:
+  enabled: true
+  whisper_model: large-v3-turbo
+  tts_voice: af_sky
+  # Biases speech recognition toward words you actually use.
+  vocabulary: "AIDE, PyTorch, CUDA, Git, VS Code, embeddings, fine-tuning"
+
+paths:
+  file_search_roots:
+    - "~/Documents"
+    - "~/Downloads"
+    - "~/Desktop"
+  file_search_exclude:
+    - node_modules
+    - venv
+    - __pycache__
+    - snap
+    - flatpak
+
+```
 
 The planner and `deep_think` request reasoning mode through `chat_template_kwargs.enable_thinking`;
 models whose chat template has no such switch simply ignore it.
@@ -111,19 +176,19 @@ pytest
 The default suite runs in a few seconds and needs no model server, GPU, network, or display. A scripted
 `FakeLLM` replays canned replies, so the tests check AIDE's own logic rather than any model:
 
-- **planner**: JSON repair, plan fix-ups, terminal prerequisites, fallback when the model returns junk
-- **executor**: dependency resolution, retry/inject/abort decisions, pause and resume on confirmation
-- **orchestrator**: full turns end to end, confirmation yes/no/unclear, verified-URL handling, voice gating
-- **terminal**: safety tiers, refusal of dangerous commands, the silence watchdog
-- **tools and context**: path resolution, truncation, search formatting, incremental file indexing
-- **benchmark harness**: scoring and reporting, checked against a scripted fake server
+- Planner: JSON repair, plan fix-ups, terminal prerequisites, fallback when the model returns junk
+- Executor: dependency resolution, retry/inject/abort decisions, pause and resume on confirmation
+- Orchestrator: full turns end to end, confirmation yes/no/unclear, verified-URL handling, voice gating
+- Terminal: safety tiers, refusal of dangerous commands, the silence watchdog
+- Tools and context: path resolution, truncation, search formatting, incremental file indexing
+- Benchmark harness: scoring and reporting, checked against a scripted fake server
 
 ## Benchmark (real models)
 
 A deliberately small benchmark for the models in `config/settings.yaml`. It's
 meant to show that the system works with a given model and roughly how fast, not to rank models.
-Tools are stubbed, so nothing touches your files or the web. Expect a few minutes on a 27B model;
-`--repeats 1` makes it quicker.
+Tools are stubbed, so nothing touches your files or the web. Expect a few minutes on a VRAM model;
+`--repeats 1` makes it quicker but is more susceptible to luck.
 
 The cases include some tough ones on purpose: a request with three sub-tasks, "open it but don't run it",
 "read it" versus "open it", a request that needs no tools at all, a file list where the right file is not
@@ -167,29 +232,6 @@ ui/                 chat window, hotkey socket, optional voice
 tests/              unit tests; tests/live/ needs real models
 benchmarks/         small real-model benchmark (run.py) and its cases
 ```
-
-## What I learned
-
-The plan-first design has real advantages. Independent sub-tasks run in parallel, the whole plan can be
-inspected before anything executes, and confirmation gates are easy to place. It also has costs, and they
-are the reason I'd reach for a tool-calling loop today:
-
-- **Planning blind is brittle.** The planner can't see results, so it guesses at steps like "open the
-  best URL". That is why the executor needs a resolver and an adaptive controller to patch the plan as
-  reality arrives, which re-creates a loop at the cost of extra model calls per step.
-- **Rules that matter shouldn't depend on the prompt.** Requirements like "always search before running a
-  command" are enforced in code (`enforce_terminal_prereqs`) as a backstop. The benchmark reports how often
-  that code has to step in (`plans_where_code_added_steps`), which is a handy way to compare models.
-- **Latency stacks up.** Plan, resolve, run, decide, summarize, synthesize: several sequential model calls
-  for what a native tool-calling model does in one or two.
-- **Native tool calling is simply better.** Models are now trained on structured calls and observations.
-  Hand-rolled JSON plans, with all the repair they need, are the weaker version.
-
-Other known limits: English only, Linux only, no streaming, no persistent memory across sessions, and
-the safety tiers above are heuristics.
-
-Related ideas in the literature: plan-then-execute agents such as ReWOO and LLMCompiler, which also plan
-up front and run independent steps in parallel.
 
 ## License
 
