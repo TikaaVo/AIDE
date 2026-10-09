@@ -1,0 +1,13 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The UI (PyQt6) and voice extras aren't needed: the tests never touch them.
+      - run: pip install pytest requests pyyaml beautifulsoup4 ddgs chromadb pypdf
+      - run: pytest

@@ -1,0 +1,4 @@
+# Optional: voice input/output (set voice.enabled: true in config/settings.yaml)
+faster-whisper
+sounddevice
+kokoro

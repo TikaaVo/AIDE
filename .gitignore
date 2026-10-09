@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Test and tool caches
+.pytest_cache/
+
+# AIDE runtime data
+.chroma/
+
+# Local files
+.env
+results*.json
+.DS_Store
+.vscode/
+.idea/
+
+settings.yaml
