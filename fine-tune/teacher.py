@@ -32,7 +32,7 @@ import requests
 
 from common import DATA, append_jsonl, canon_of_raw, read_jsonl
 
-URL = os.environ.get("TEACHER_URL", "http://172.17.0.1:8081/v1/chat/completions")
+URL = os.environ.get("TEACHER_URL", "http://localhost:8080/v1/chat/completions")
 MODEL = os.environ.get("TEACHER_MODEL", "local")
 THINKING = os.environ.get("THINKING", "0") == "1"
 WORKERS, TEMP = int(os.environ.get("WORKERS", 4)), float(os.environ.get("TEMP", 0.7))

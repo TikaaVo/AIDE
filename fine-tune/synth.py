@@ -19,7 +19,7 @@ import requests
 
 from common import DATA, append_jsonl, norm_key, read_jsonl
 
-API_URL = os.environ.get("GEN_URL", "http://172.17.0.1:8081/v1/chat/completions")
+API_URL = os.environ.get("GEN_URL", "http://localhost:8080/v1/chat/completions")
 API_KEY = os.environ.get("GEN_KEY", "")
 MODEL = "local-model"
 WORKERS = int(os.environ.get("WORKERS", 4))

@@ -166,6 +166,10 @@ Then bind a global keyboard shortcut in your desktop environment to `scripts/aid
 window) and, for voice, `scripts/aide_record_toggle.sh` (start/stop recording). They need `socat`.
 Closing the window starts a fresh conversation.
 
+## Fine tuning the planner agent
+
+Under fine-tune is the code for fine tuning a planner agent. Attempting this with a local 27b model, the teacher scored 82% on the gold dataset, while a Qwen2.5 0.5B, intially scoring 0% with 0/50 valid JSON plans, scored up to 80% with 50/50 valid JSON plans after fine tuning. Dataset is not included for a lightweight repo, but contact the developer to request the full fine tuning dataset.
+
 ## Tests
 
 ```bash
