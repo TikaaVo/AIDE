@@ -1,0 +1,14 @@
+## Tools (AIDE's tool descriptions)
+- chat: Answer questions, explain things, write text, brainstorm, or hold a conversation, using general knowledge or data already retrieved. For purely conversational turns that need no external tools.
+- deep_think: Reason carefully before acting. Use for complex requests, conflicting sources, or risky steps such as deciding which shell command to run. Not for simple lookups. The output is reasoning text for later steps.
+- file_search: Semantically search the user's files (by name and content) and return the best matches with their paths. Use it to find or locate a file, or before open_file / read_file.
+- open_file: Open a file in the system's default application (xdg-open). Use when the user wants a file opened and its path is known from context; otherwise run file_search first. This does not execute code.
+- open_url: Fetch the text of a web page. Use it to read or summarize a specific page, especially to explore URLs returned by web_search. Not for searching (use web_search).
+- read_file: Read a local text file so AIDE itself can examine, summarize or answer questions about it. To launch a file in an external app use open_file instead. If the path isn't known, run file_search first.
+- summarize: Summarize all earlier step outputs of a thread. Appended automatically by the planner, so never include it in a plan.
+- terminal: Run a shell command on the user's system (Linux): install packages, manage files, run scripts, check system state, control services. ALWAYS plan web_search and deep_think before it (to find the right command and reason about it), unless the step just runs a local file that file_search already found.
+- web_search: Search the web (DuckDuckGo) for current information: news, facts, prices, weather, documentation, anything recent or outside the model's training data. Use it whenever fresh information could help, even if the user didn't ask for it, but don't overdo it. Not for the user's local files (use file_search). For deep research, chain several searches.
+
+## Reminders
+- depends_on may only point to steps inside the SAME thread. Never add a step that combines results from several threads: AIDE summarizes each thread and writes the final answer itself.
+- Never include summarize, and never end a thread with a chat step unless the whole request is conversational.

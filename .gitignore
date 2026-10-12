@@ -19,3 +19,9 @@ results*.json
 .idea/
 
 settings.yaml
+
+*.json
+*.jsonl
+*.csv
+*.jinja
+*.safetensors
